@@ -18,7 +18,7 @@ import itertools
 def merge_timepoints(dc):
     result = {} 
     for d in dc: 
-        for k in d.keys(): 
+        for k in d:
             result[k] = result.get(k, 0) + d[k]
     return(result)
 
@@ -73,7 +73,7 @@ r_datetimes_f, r_datetimes = {}, {}
 for date_i in set(run_dates):
     for date_idx in range(0,len(run_dates)):
         if date_i == run_dates[date_idx]:
-            if date_i not in r_datetimes.keys():
+            if date_i not in r_datetimes:
                 r_datetimes[date_i], r_datetimes_f[date_i] = [], []
                 r_datetimes_f[date_i].append(run_datetimes_f[date_idx])
                 r_datetimes[date_i].append(run_datetimes[date_idx])
@@ -83,39 +83,45 @@ for date_i in set(run_dates):
 
 # go through dates and get the submissions, comments then count tickers
 all_tickers = {}
-counter = 1
-for date_id, day_dates in r_datetimes.items():
-    print("\nCounting subreddit: " + subreddit_name + " for day " + date_id, "(" + str(counter) + " of", str(len(r_datetimes.items())) + ")" )
-    counter += 1
+
+sorteddates = sorted(r_datetimes.items(), key=lambda x: x[1])
+for i, (date_id, day_dates) in enumerate(sorteddates):
+    print("\nCounting subreddit: " + subreddit_name + " for day " + date_id, "(" + str(i+1) + " of", str(len(r_datetimes.items())) + ")" )
     day_tickers = []
-    for datetime_value in day_dates:
-     
-        # prep time points
-        time_point_1 = datetime_value
-        time_point_2 = time_point_1 + time_step
-        time_point_1 = int(time_point_1.timestamp())
-        time_point_2 = int(time_point_2.timestamp())
-        
+    time_point_1 = int(day_dates[0].timestamp())
+    while i < len(sorteddates) and time_point_1 < sorteddates[i+1][1][0].timestamp():
+
         # url for time points
-        sid_url = "https://api.pushshift.io/reddit/search/submission/?subreddit=" + subreddit_name + "&sort=asc&sort_type=created_utc&after=" + str(time_point_1) + "&before="+str(time_point_2) + "&size=1000"
-        print('\n\nGetting submission IDs between ', datetime.fromtimestamp(time_point_1), ' - ', datetime.fromtimestamp(time_point_2))        
+        sid_url = "https://api.pushshift.io/reddit/search/submission/?subreddit=" + subreddit_name + "&sort=asc&sort_type=created_utc&after=" + str(time_point_1) + "&fields=id,created_utc,num_comments&size=1000"# + "&before="+str(time_point_2) + "&size=1000"
+        print('\n\nGetting submission IDs from ', datetime.fromtimestamp(time_point_1))#, ' - ', datetime.fromtimestamp(time_point_2))
 
         # get request
         r = requests.get(sid_url)
         try:
             data = json.loads(r.text)
-            tp_num_comments, tp_count, tp_tickers, sub_time =  0, 0,  {},  []
+            tp_num_comments, tp_tickers, sub_time = 0, {},  []
 
             num_sub_beween_tp = len(data['data'])
             # time.sleep(1)
             print('Processing submissions and comments...')
-            for sub_i in range(num_sub_beween_tp):
+            for sub in data['data']:
+
+                if sub['num_comments'] == 0:
+                    # skip submissions without comments.
+                    continue
+
+                # FIXME
+                # if sub.created_utc is next day:
+                #    break
 
                 # get submission from praw
-                sid = data['data'][sub_i]['id']
+                sid = sub['id']
+                time_point_1 = int(sub['created_utc']) + 1
+
                 submission = reddit.submission(id=sid)
                 sub_time = submission.created_utc
                 submission.comment_sort = 'new'
+
 
                 # skip submission if there are a massive amount of comments
                 if submission.num_comments > 0 and submission.num_comments < 15000 :
@@ -130,13 +136,11 @@ for date_id, day_dates in r_datetimes.items():
                             if word.isupper() and len(word) <= 5 and word not in blacklist and word in stock_tickers:
                                 if word in tp_tickers:
                                     tp_tickers[word] += 1
-                                    tp_count += 1
                                 else:
                                     tp_tickers[word] = 1
-                                    tp_count += 1
         except:
             print('Skipping.....')
-            next
+            continue
 
         print("Found {s} submissions with {c} comments ".format( s=num_sub_beween_tp, c = tp_num_comments))
         res = dict(sorted(tp_tickers.items(), key=lambda item: item[1], reverse = True))
