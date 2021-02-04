@@ -4,6 +4,7 @@
 #
 
 ### LIBRARIES #################################################################
+import sys
 import praw
 import time
 from datetime import datetime, timedelta
@@ -15,12 +16,6 @@ import h5py
 import itertools
 
 ### FUNCTIONS #################################################################
-def merge_timepoints(dc):
-    result = {} 
-    for d in dc: 
-        for k in d:
-            result[k] = result.get(k, 0) + d[k]
-    return(result)
 
 def write_day(date_id, ticker_names, count_vals, out_file):
     print("\n Writing out " + date_id)
@@ -37,30 +32,25 @@ def write_day(date_id, ticker_names, count_vals, out_file):
 
 def get_pushshift_url(subreddit_name, time_point):
     # time point is unix UTC
-    sid_url = ("https://api.pushshift.io/reddit/search/submission/?subreddit=" +
-    subreddit_name + "&sort=asc&sort_type=created_utc&after=" +
-    str(time_point) +
-    "&fields=id,created_utc,num_comments&size=1000")# + "&before="+str(time_point_2) + "&size=1000"
+    sid_url = "https://api.pushshift.io/reddit/search/submission/?subreddit=" \
+        + subreddit_name \
+        + "&sort=asc&sort_type=created_utc&after=" \
+        + str(time_point) \
+        + "&fields=id,created_utc,num_comments&size=1000"
     return(sid_url)
 
-def is_next_day(tp1,tp2):
-    return(datetime.fromtimestamp(tp2).date() > datetime.fromtimestamp(tp1).date())
-
 def is_current_day(tp1,tp2):
-    return(datetime.fromtimestamp(tp2).date() == datetime.fromtimestamp(tp1).date())
+    return datetime.fromtimestamp(tp2).date() == datetime.fromtimestamp(tp1).date()
 
 def to_date_str(ts):
-   return(datetime.fromtimestamp(ts).strftime("%b_%d_%Y"))
+   return datetime.fromtimestamp(ts).strftime("%b_%d_%Y")
 
 def to_date(ts):
-    return(datetime.date(ts))
+    return datetime.date(ts)
 
 def to_time_srt(ts):
-    return(datetime.fromtimestamp(current_time).strftime(("%b-%d-%Y %H:%M")))
+    return datetime.fromtimestamp(current_time).strftime(("%b-%d-%Y %H:%M"))
     
-
-#import pdb; pdb.set_trace()
-
 ### MAIN ######################################################################
 
 # praw
@@ -72,7 +62,7 @@ reddit = praw.Reddit(
     password=prv_password)
 
 # params
-subreddit_name = 'wallstreetbets'
+subreddit_name = 'stocks'
 comment_limit = 1000
 upvotes = 0
 
@@ -80,7 +70,7 @@ upvotes = 0
 out_file = "out/out_tickers_" + subreddit_name + ".h5"
 
 # time params 
-s_datetime = datetime(2020, 10, 17, 0, 0, 0) # start date
+s_datetime = datetime(2020, 10, 1, 0, 0, 0) # start date
 e_datetime = datetime(2020, 10, 20, 0, 0, 0) # end date
 num_days = (to_date(e_datetime) - to_date(s_datetime)).days
 
@@ -120,7 +110,6 @@ while current_time < int(e_datetime.timestamp()):
                 # get submission from praw
                 sid = sub['id']
                 current_time = int(sub['created_utc']) + 1
-                #print(current_time,to_date_str(current_time))
                 
                 submission = reddit.submission(id=sid)
                 submission.comment_sort = 'new'
@@ -130,7 +119,7 @@ while current_time < int(e_datetime.timestamp()):
                     comments = submission.comments
                     for comment in comments:
                         tp_num_comments += 1
-                        split = comment.body.split(" ")
+                        split = set(comment.body.split(" "))
                         for word in split:
                             word = word.replace("$", "")        
                             # word is uppercase, less than 5 characters, not in blacklist
@@ -139,13 +128,13 @@ while current_time < int(e_datetime.timestamp()):
                                     tp_tickers[word] += 1
                                 else:
                                     tp_tickers[word] = 1
+                    sys.stdout.write(".") 
+                    sys.stdout.flush()
                                     
             else:
-                #print("HERE - this is the next day DAYDAY")
-                print("Found {s} submissions with {c} comments ".format(s=num_sub_beween_tp, c = tp_num_comments))
+                print("\nFound {s} submissions with {c} comments ".format(s=num_sub_beween_tp, c = tp_num_comments))
                 print("Time taken: " + str(round(int(time.time() - day_start_time) / 60)) + " minutes")
-                time.sleep(5)
-                print(to_date_str(current_time),to_date_str(sub['created_utc']))
+                print("Stocks: {}", sorted(tp_tickers.items(), key=lambda x: x[1], reverse=True))
                 all_tickers[to_date_str(current_time)] = tp_tickers # merge_timepoints(tp_tickers)
                 day_counter+=1
                 
@@ -159,7 +148,7 @@ while current_time < int(e_datetime.timestamp()):
                 current_time = int(sub['created_utc']) + 1
                 tp_num_comments, tp_tickers = 0, {}
 
-    except:
+    except ValueError:
         print('Skipping.....')
         continue
 
