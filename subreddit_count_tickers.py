@@ -62,7 +62,7 @@ reddit = praw.Reddit(
     password=prv_password)
 
 # params
-subreddit_name = 'stocks'
+subreddit_name = 'wallstreetbets'
 comment_limit = 1000
 upvotes = 0
 
@@ -70,8 +70,8 @@ upvotes = 0
 out_file = "out/out_tickers_" + subreddit_name + ".h5"
 
 # time params 
-s_datetime = datetime(2020, 10, 1, 0, 0, 0) # start date
-e_datetime = datetime(2020, 10, 20, 0, 0, 0) # end date
+s_datetime = datetime(2021, 1, 25, 0, 0, 0) # start date
+e_datetime = datetime(2021, 1, 27, 0, 0, 0) # end date
 num_days = (to_date(e_datetime) - to_date(s_datetime)).days
 
 # go through dates and get the submissions, comments then count tickers
@@ -104,6 +104,8 @@ while current_time < int(e_datetime.timestamp()):
         for sub in data['data']:
             if sub['num_comments'] == 0:
                 # skip submissions without comments.
+                sys.stdout.write("-")
+                sys.stdout.flush()
                 continue
             
             if is_current_day(current_time, sub['created_utc']):
@@ -142,7 +144,7 @@ while current_time < int(e_datetime.timestamp()):
                 try:
                     write_day(date_id = to_date_str(current_time), ticker_names = [*tp_tickers.keys()], count_vals = [*tp_tickers.values()], out_file = out_file)
                 except:
-                    print("Failed during write out for " + date_id)
+                    print("Failed during write out for " + to_date_str(current_time))
                 
                 # reset ticker counter for next day
                 current_time = int(sub['created_utc']) + 1
